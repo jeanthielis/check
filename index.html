@@ -42,9 +42,13 @@
     <script>
         function gerarLinkZap() {
             // ==========================================================
-            // LINK CONFIGURADO PARA O SEU NETLIFY
+            // CONFIGURAÇÃO: Agora aponta para 'conferencia.html'
             // ==========================================================
-            const urlPaginaB = 'https://check-confirm.netlify.app/'; 
+            // Substitua 'check-confirm.netlify.app' pelo seu domínio real se for diferente
+            const dominio = 'https://check-confirm.netlify.app'; 
+            const arquivoDestino = 'index.html';
+            
+            const urlCompleta = `${dominio}/${arquivoDestino}`; 
             
             // 1. Coletar dados
             const extra = document.getElementById('extra').value;
@@ -63,7 +67,7 @@
                 d: new Date().toLocaleString('pt-BR')
             };
 
-            // 2. Criptografar (Mesma senha da página B)
+            // 2. Criptografar (Mesma senha da página conferencia.html)
             const jsonStr = JSON.stringify(payload);
             const encrypted = CryptoJS.AES.encrypt(jsonStr, 'minha-chave-secreta-123').toString();
             
@@ -71,8 +75,8 @@
             const paramSeguro = encodeURIComponent(encrypted);
 
             // 4. Montar link final
-            // Resultado ex: https://check-confirm.netlify.app/?dados=U2FsdGVkX1...
-            const linkAuditoria = `${urlPaginaB}?dados=${paramSeguro}`;
+            // Resultado ex: https://dominio.app/conferencia.html?dados=U2FsdGVkX1...
+            const linkAuditoria = `${urlCompleta}?dados=${paramSeguro}`;
 
             // 5. Texto do WhatsApp
             const textoZap = `📦 *Novo Checklist Criado* %0A` +
