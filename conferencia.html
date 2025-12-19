@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conferência</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; background: #222; color: white; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* Telas */
+        .screen { display: none; height: 100%; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        .active { display: flex; }
+
+        /* Scanner */
+        #reader { width: 100%; max-width: 500px; border-radius: 12px; overflow: hidden; background: #000; }
+        
+        /* Instruções */
+        .status-header { position: fixed; top: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 20px; font-size: 1.2rem; z-index: 10; }
+        .target { color: #f1c40f; font-weight: bold; font-size: 1.5rem; display: block; margin-top: 5px; }
+
+        /* Sucesso */
+        .success-bg { background: #27ae60; }
+        .card-report { background: white; color: #333; padding: 20px; border-radius: 10px; width: 100%; max-width: 350px; text-align: left; margin-top: 20px; }
+        .item { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; }
+        .btn-zap { background: #25d366; color: white; border: none; padding: 15px; width: 100%; border-radius: 50px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; text-decoration: none; display: block; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-wait" class="screen active">
+        <h2>Aguardando Link...</h2>
+        <p>Abra este sistema clicando no link enviado pelo WhatsApp.</p>
+    </div>
+
+    <div id="screen-scan" class="screen" style="justify-content: flex-start; padding-top: 100px;">
+        <div class="status-header">
+            PROCURANDO:
+            <span id="target-label" class="target">CARREGANDO...</span>
+        </div>
+        <div id="reader"></div>
+        <p style="margin-top:20px; color: #aaa;">Aponte para o código de barras</p>
+    </div>
+
+    <div id="screen-result" class="screen success-bg">
+        <h1 style="font-size: 4rem; margin: 0;">✔</h1>
+        <h2>CONFERÊNCIA OK</h2>
+        <div class="card-report" id="report-body"></div>
+        <div id="btn-container" style="width: 100%; max-width: 350px;"></div>
+    </div>
+
+    <script>
+        let dadosChecklist = null;
+        let scanner = null;
+        // Ordem exata da conferência
+        const etapas = [
+            { id: 'e', label: 'CÓD. EXTRA' },
+            { id: 'c', label: 'CÓD. COMERCIAL' },
+            { id: 'p', label: 'CÓD. POPULAR' }
+        ];
+        let etapaAtual = 0;
+
+        // 1. Ao carregar, verifica o Link
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            const dadosCripto = params.get('dados');
+
+            if(dadosCripto) {
+                try {
+                    const bytes = CryptoJS.AES.decrypt(decodeURIComponent(dadosCripto), 'minha-chave-secreta-123');
+                    const texto = bytes.toString(CryptoJS.enc.Utf8);
+                    if(!texto) throw new Error("Senha inválida");
+                    
+                    dadosChecklist = JSON.parse(texto);
+                    iniciarConferencia();
+                } catch(e) {
+                    alert("Link inválido ou corrompido.");
+                }
+            }
+        };
+
+        function iniciarConferencia() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-scan').classList.add('active');
+            
+            etapaAtual = 0;
+            atualizarTitulo();
+
+            // Configura Scanner
+            scanner = new Html5Qrcode("reader");
+            scanner.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: 250 },
+                onScan
+            ).catch(err => {
+                alert("Erro ao abrir câmera: " + err);
+            });
+        }
+
+        function atualizarTitulo() {
+            const info = etapas[etapaAtual];
+            document.getElementById('target-label').innerText = info.label;
+        }
+
+        function onScan(lido) {
+            const keyAtual = etapas[etapaAtual].id; // 'e', 'c' ou 'p'
+            const esperado = dadosChecklist[keyAtual];
+
+            if(lido === esperado) {
+                // Sucesso na leitura
+                alert(`✅ ${etapas[etapaAtual].label} OK!`);
+                etapaAtual++;
+
+                if(etapaAtual >= 3) {
+                    finalizar();
+                } else {
+                    atualizarTitulo();
+                    // Pausa rápida para não ler duplicado
+                    scanner.pause();
+                    setTimeout(() => scanner.resume(), 1500);
+                }
+            } else {
+                console.log(`Errado. Lido: ${lido} | Esperado: ${esperado}`);
+            }
+        }
+
+        function finalizar() {
+            scanner.stop().then(() => {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById('screen-result').classList.add('active');
+                
+                // Gerar Relatório Visual
+                const html = `
+                    <div class="item"><span>Data:</span> <b>${dadosChecklist.d}</b></div>
+                    <div class="item"><span>Extra:</span> <b>${dadosChecklist.e}</b></div>
+                    <div class="item"><span>Comercial:</span> <b>${dadosChecklist.c}</b></div>
+                    <div class="item"><span>Popular:</span> <b>${dadosChecklist.p}</b></div>
+                `;
+                document.getElementById('report-body').innerHTML = html;
+
+                // Gerar Botão Zap
+                const msgZap = `✅ *CONFERÊNCIA VALIDADA*%0A` +
+                               `📅 ${dadosChecklist.d}%0A` +
+                               `------------------%0A` +
+                               `📦 Extra: OK%0A📦 Comercial: OK%0A📦 Popular: OK%0A` +
+                               `------------------%0A` +
+                               `👮 Supervisor Validado`;
+                
+                document.getElementById('btn-container').innerHTML = `
+                    <a href="https://wa.me/?text=${msgZap}" class="btn-zap">
+                        📲 Enviar Confirmação
+                    </a>
+                    <button onclick="location.href=location.href" style="background:none; border:none; color:white; margin-top:15px; text-decoration:underline;">Reiniciar</button>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
